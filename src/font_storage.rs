@@ -1,11 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 pub struct FontStorage {
     /// This is the font set that has been loaded by fontdb.
     font_db: fontdb::Database,
     /// This is the font that has been loaded by fontdue.
     /// Not all fonts in fontdb are necessarily loaded here.
-    loaded_font: HashMap<fontdb::ID, fontdue::Font, fxhash::FxBuildHasher>,
+    loaded_font: HashMap<fontdb::ID, Arc<fontdue::Font>, fxhash::FxBuildHasher>,
 }
 
 impl Default for FontStorage {
@@ -85,20 +85,16 @@ impl FontStorage {
 
 /// Get `Font`
 impl FontStorage {
-    pub fn query_font(&mut self, query: &fontdb::Query) -> Option<&fontdue::Font> {
+    pub fn query(&mut self, query: &fontdb::Query) -> Option<(fontdb::ID, Arc<fontdue::Font>)> {
         let id = self.font_db.query(query)?;
-        self.font(id)
+        self.font(id).map(|font| (id, font))
     }
 
-    pub fn query_id(&self, query: &fontdb::Query) -> Option<fontdb::ID> {
-        self.font_db.query(query)
-    }
-
-    pub fn font(&mut self, id: fontdb::ID) -> Option<&fontdue::Font> {
+    pub fn font(&mut self, id: fontdb::ID) -> Option<Arc<fontdue::Font>> {
         use std::collections::hash_map::Entry;
 
         match self.loaded_font.entry(id) {
-            Entry::Occupied(entry) => Some(entry.into_mut()),
+            Entry::Occupied(entry) => Some(Arc::clone(entry.get())),
             Entry::Vacant(entry) => {
                 let font_result = self.font_db.with_face_data(id, |data, index| {
                     fontdue::Font::from_bytes(
@@ -113,8 +109,8 @@ impl FontStorage {
                 let font = font_result.ok()?;
 
                 // insert and return a reference that borrows from the map
-                let r: &mut fontdue::Font = entry.insert(font);
-                Some(&*r)
+                let r: &mut Arc<fontdue::Font> = entry.insert(Arc::new(font));
+                Some(Arc::clone(r))
             }
         }
     }

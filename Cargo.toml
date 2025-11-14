@@ -8,5 +8,10 @@ fontdb = "0.23.0"
 fontdue = "0.9.3"
 fxhash = "0.2.1"
 guillotiere = "0.6.2"
+log = "0.4.28"
 mini-moka = "0.10.3"
 wgpu = "27.0.1"
+
+[lints.clippy]
+unwrap-used = "warn"
+too-many-arguments = "allow"

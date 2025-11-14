@@ -1,4 +1,4 @@
-pub mod font_strage;
+pub mod font_storage;
 pub mod glyph_id;
 pub mod text;
 
