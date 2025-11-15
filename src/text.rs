@@ -25,6 +25,7 @@ pub struct TextElement {
 ///
 /// All parameters are honored during a single `TextData::layout` call so the
 /// caller can measure or place text inside arbitrary rectangles.
+#[derive(Clone)]
 pub struct TextLayoutConfig {
     pub max_width: Option<f32>,
     pub max_height: Option<f32>,
@@ -63,6 +64,7 @@ pub enum WrapStyle {
 
 /// Final layout output produced by [`TextData::layout`].
 pub struct TextLayout {
+    pub config: TextLayoutConfig,
     pub total_height: f32,
     pub total_width: f32,
     pub lines: Vec<TextLayoutLine>,
@@ -393,8 +395,9 @@ impl TextData {
         }
 
         TextLayout {
-            total_height: total_height.max(target_height),
-            total_width: total_width.max(target_width),
+            config: config.clone(),
+            total_height,
+            total_width,
             lines: lines_out,
         }
     }
@@ -433,13 +436,12 @@ impl TextData {
             if let Some(projected) = line_buf
                 .as_ref()
                 .map(|current| current.projected_concat_length(&buffer, font_storage))
+                && projected <= limit_width
             {
-                if projected <= limit_width {
-                    if let Some(current) = line_buf.as_mut() {
-                        current.concat(buffer, font_storage);
-                    }
-                    return;
+                if let Some(current) = line_buf.as_mut() {
+                    current.concat(buffer, font_storage);
                 }
+                return;
             }
 
             if line_buf.is_some() {
@@ -524,19 +526,16 @@ impl TextData {
             return;
         }
 
-        if !allow_leading_space {
-            if let Some(first) = fragments.first() {
-                if first.ch.is_whitespace()
-                    && line_buf
-                        .as_ref()
-                        .map(|line| line.glyphs.is_empty())
-                        .unwrap_or(true)
-                {
-                    return;
-                }
-            }
+        if !allow_leading_space
+            && let Some(first) = fragments.first()
+            && first.ch.is_whitespace()
+            && line_buf
+                .as_ref()
+                .map(|line| line.glyphs.is_empty())
+                .unwrap_or(true)
+        {
+            return;
         }
-
         Self::append_fragments_to_line(
             line_buf,
             lines,
@@ -579,7 +578,6 @@ impl TextData {
     }
 }
 
-#[allow(dead_code)]
 mod measure {
     //! Legacy measuring helpers kept for reference.
 
