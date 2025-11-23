@@ -255,18 +255,6 @@ impl CacheAtlas {
     fn clear(&mut self) {
         self.cache_state.clear();
     }
-
-    fn tile_size(&self) -> usize {
-        self.tile_size
-    }
-
-    fn tiles_per_axis(&self) -> usize {
-        self.tiles_per_axis
-    }
-
-    fn texture_size(&self) -> usize {
-        self.texture_size
-    }
 }
 
 impl CacheAtlas {
@@ -295,6 +283,25 @@ pub struct GlyphCacheItem {
     pub atlas_idx: usize,
     pub texture_size: usize,
     pub glyph_box: Box2D<usize, UnknownUnit>,
+}
+
+impl GlyphCacheItem {
+    pub const fn glyph_uv(&self) -> Box2D<f32, UnknownUnit> {
+        let x_min = self.glyph_box.min.x;
+        let x_max = self.glyph_box.max.x;
+        let y_min = self.glyph_box.min.y;
+        let y_max = self.glyph_box.max.y;
+        Box2D::new(
+            Point2D::new(
+                x_min as f32 / self.texture_size as f32,
+                y_min as f32 / self.texture_size as f32,
+            ),
+            Point2D::new(
+                x_max as f32 / self.texture_size as f32,
+                y_max as f32 / self.texture_size as f32,
+            ),
+        )
+    }
 }
 
 pub struct GlyphCache {
@@ -343,11 +350,11 @@ impl GlyphCache {
         let cache_index = self
             .caches
             .iter()
-            .position(|cache| glyph_bitmap_size <= cache.tile_size())?;
+            .position(|cache| glyph_bitmap_size <= cache.tile_size)?;
 
         let cache = &mut self.caches[cache_index];
         let atlas_idx = cache_index;
-        let texture_size = cache.texture_size();
+        let texture_size = cache.texture_size;
         let [x_min, y_min] = cache.get_and_protect_entry(glyph_id)?;
         let x_max = x_min + glyph_metrics.width;
         let y_max = y_min + glyph_metrics.height;
@@ -377,11 +384,11 @@ impl GlyphCache {
         let cache_index = self
             .caches
             .iter()
-            .position(|cache| glyph_bitmap_size <= cache.tile_size())?;
+            .position(|cache| glyph_bitmap_size <= cache.tile_size)?;
 
         let cache = &mut self.caches[cache_index];
         let atlas_idx = cache_index;
-        let texture_size = cache.texture_size();
+        let texture_size = cache.texture_size;
         let [x_min, y_min] = cache.get_and_push_with_evicting_unprotected(glyph_id)?;
         let x_max = x_min + glyph_metrics.width;
         let y_max = y_min + glyph_metrics.height;

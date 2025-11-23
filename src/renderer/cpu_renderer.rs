@@ -17,6 +17,10 @@ impl CpuRenderer {
         Self { cache }
     }
 
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
+    }
+
     /// Renders the provided [`TextLayout`] into an [`Bitmap`].
     pub fn render_layout(
         &mut self,
@@ -91,15 +95,5 @@ impl CpuRenderer {
                 bitmap.accumulate(ix as usize, iy as usize, src_alpha);
             }
         }
-    }
-
-    /// Returns a reference to the underlying glyph cache.
-    pub fn cache(&self) -> &GlyphCache {
-        &self.cache
-    }
-
-    /// Returns a mutable reference to the underlying glyph cache.
-    pub fn cache_mut(&mut self) -> &mut GlyphCache {
-        &mut self.cache
     }
 }
