@@ -188,10 +188,12 @@ impl<T: Default + Clone + Copy> VecAtlas<T> {
     }
 }
 
+use std::borrow::Cow;
+
 pub struct GlyphCacheItem<'a> {
     pub width: usize,
     pub height: usize,
-    pub data: &'a [u8],
+    pub data: Cow<'a, [u8]>,
 }
 
 pub struct GlyphCache {
@@ -247,7 +249,7 @@ impl GlyphCache {
         Some(GlyphCacheItem {
             width: glyph_metrics.width,
             height: glyph_metrics.height,
-            data,
+            data: Cow::Borrowed(data),
         })
     }
 }
