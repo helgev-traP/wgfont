@@ -50,8 +50,22 @@ impl CpuRenderer {
         glyph_pos: &GlyphPosition,
         font_storage: &mut FontStorage,
     ) {
-        let Some(cached) = self.cache.get(&glyph_pos.glyph_id, font_storage) else {
-            return;
+        let cached = match self.cache.get(&glyph_pos.glyph_id, font_storage) {
+            Some(cached) => cached,
+            None => {
+                let Some(font) = font_storage.font(glyph_pos.glyph_id.font_id()) else {
+                    return;
+                };
+                let (metrics, bitmap) = font.rasterize_indexed(
+                    glyph_pos.glyph_id.glyph_index(),
+                    glyph_pos.glyph_id.font_size(),
+                );
+                GlyphCacheItem {
+                    width: metrics.width,
+                    height: metrics.height,
+                    data: std::borrow::Cow::Owned(bitmap),
+                }
+            }
         };
 
         if cached.width == 0 || cached.height == 0 {
