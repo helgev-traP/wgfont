@@ -6,7 +6,7 @@ use crate::{glyph_id::GlyphId, text::TextData};
 ///
 /// All parameters are honored during a single `TextData::layout` call so the
 /// caller can measure or place text inside arbitrary rectangles.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextLayoutConfig {
     pub max_width: Option<f32>,
     pub max_height: Option<f32>,
@@ -17,6 +17,22 @@ pub struct TextLayoutConfig {
     pub wrap_hard_break: bool,
     pub word_separators: HashSet<char, fxhash::FxBuildHasher>,
     pub linebreak_char: HashSet<char, fxhash::FxBuildHasher>,
+}
+
+impl Default for TextLayoutConfig {
+    fn default() -> Self {
+        Self {
+            max_width: None,
+            max_height: None,
+            horizontal_align: HorizontalAlign::Left,
+            vertical_align: VerticalAlign::Top,
+            line_height_scale: 1.0,
+            wrap_style: WrapStyle::NoWrap,
+            wrap_hard_break: false,
+            word_separators: HashSet::default(),
+            linebreak_char: HashSet::default(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,14 +60,15 @@ pub enum WrapStyle {
 }
 
 /// Final layout output produced by [`TextData::layout`].
-pub struct TextLayout {
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextLayout<T> {
     pub config: TextLayoutConfig,
     pub total_height: f32,
     pub total_width: f32,
-    pub lines: Vec<TextLayoutLine>,
+    pub lines: Vec<TextLayoutLine<T>>,
 }
 
-impl TextLayout {
+impl<T> TextLayout<T> {
     pub fn len_lines(&self) -> usize {
         self.lines.len()
     }
@@ -62,40 +79,45 @@ impl TextLayout {
 }
 
 /// A single row of positioned glyphs in the final layout.
-pub struct TextLayoutLine {
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextLayoutLine<T> {
     pub line_height: f32,
     pub line_width: f32,
-    pub glyphs: Vec<GlyphPosition>,
+    pub top: f32,
+    pub bottom: f32,
+    pub glyphs: Vec<GlyphPosition<T>>,
 }
 
 /// **Y-axis goes down**
 ///
 /// Each glyph uses the global coordinates generated during layout so renderers
 /// can draw them directly without additional transformations.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GlyphPosition {
+#[derive(Clone, Debug, PartialEq)]
+pub struct GlyphPosition<T> {
     pub glyph_id: GlyphId,
     pub x: f32,
     pub y: f32,
+    pub user_data: T,
 }
 // place holder for eq and hash
 // todo: consider another way
-impl Eq for GlyphPosition {}
-impl std::hash::Hash for GlyphPosition {
+impl<T: Eq> Eq for GlyphPosition<T> {}
+impl<T: std::hash::Hash> std::hash::Hash for GlyphPosition<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.glyph_id.hash(state);
         self.x.to_bits().hash(state);
         self.y.to_bits().hash(state);
+        self.user_data.hash(state);
     }
 }
 
 /// Intermediate storage used while collecting glyphs for a single line.
-struct LineRecord {
-    buffer: Option<layout_utl::LayoutBuffer>,
+struct LineRecord<T> {
+    buffer: Option<layout_utl::LayoutBuffer<T>>,
     metrics: Option<fontdue::LineMetrics>,
 }
 
-impl TextData {
+impl<T: Clone> TextData<T> {
     /// Computes the bounding box that would be produced by [`Self::layout`].
     ///
     /// This helper simply forwards to `layout` because the layout stage must
@@ -126,7 +148,7 @@ impl TextData {
         &self,
         config: &TextLayoutConfig,
         font_storage: &mut crate::font_storage::FontStorage,
-    ) -> TextLayout {
+    ) -> TextLayout<T> {
         use std::sync::Arc;
 
         // Stage 1: build intermediate line buffers and decide where wrapping
@@ -143,15 +165,16 @@ impl TextData {
         let linebreak_char = &config.linebreak_char;
 
         /// Final measurements for a single laid-out line before alignment.
-        struct LineData {
+        struct LineData<T> {
             width: f32,
             height: f32,
-            glyphs: Vec<GlyphPosition>,
+            y: f32,
+            glyphs: Vec<GlyphPosition<T>>,
         }
 
-        let mut lines: Vec<LineRecord> = Vec::new();
-        let mut line_buf: Option<layout_utl::LayoutBuffer> = None;
-        let mut word_buf: Option<Vec<layout_utl::GlyphFragment>> = None;
+        let mut lines: Vec<LineRecord<T>> = Vec::new();
+        let mut line_buf: Option<layout_utl::LayoutBuffer<T>> = None;
+        let mut word_buf: Option<Vec<layout_utl::GlyphFragment<T>>> = None;
         let mut last_line_metrics: Option<fontdue::LineMetrics> = None;
 
         for text in &self.texts {
@@ -178,6 +201,7 @@ impl TextData {
                     font_id: text.font_id,
                     font_size: text.font_size,
                     font: Arc::clone(&font),
+                    user_data: text.user_data.clone(),
                 };
 
                 if linebreak_char.contains(&ch) {
@@ -279,7 +303,7 @@ impl TextData {
 
         Self::finalize_line(&mut line_buf, &mut lines, last_line_metrics);
 
-        let mut layout_lines: Vec<LineData> = Vec::new();
+        let mut layout_lines: Vec<LineData<T>> = Vec::new();
         let mut cursor_y = 0.0;
         let mut max_line_width: f32 = 0.0;
 
@@ -321,6 +345,7 @@ impl TextData {
             layout_lines.push(LineData {
                 width,
                 height: scaled_line_height,
+                y: cursor_y - scaled_line_height,
                 glyphs: glyph_positions,
             });
         }
@@ -366,6 +391,8 @@ impl TextData {
             lines_out.push(TextLayoutLine {
                 line_height: line.height,
                 line_width: line.width,
+                top: line.y + vertical_offset,
+                bottom: line.y + vertical_offset + line.height,
                 glyphs: line.glyphs,
             });
         }
@@ -386,9 +413,9 @@ impl TextData {
     /// current buffer is flushed into the line list, potentially splitting the
     /// provided fragments when hard breaking is enabled.
     fn append_fragments_to_line(
-        line_buf: &mut Option<layout_utl::LayoutBuffer>,
-        lines: &mut Vec<LineRecord>,
-        fragments: &[layout_utl::GlyphFragment],
+        line_buf: &mut Option<layout_utl::LayoutBuffer<T>>,
+        lines: &mut Vec<LineRecord<T>>,
+        fragments: &[layout_utl::GlyphFragment<T>],
         max_width: Option<f32>,
         wrap_style: WrapStyle,
         wrap_hard_break: bool,
@@ -492,9 +519,9 @@ impl TextData {
     /// common text layout behavior. All other fragments are forwarded to the
     /// lower-level append helper.
     fn append_fragments_with_rules(
-        line_buf: &mut Option<layout_utl::LayoutBuffer>,
-        lines: &mut Vec<LineRecord>,
-        fragments: &[layout_utl::GlyphFragment],
+        line_buf: &mut Option<layout_utl::LayoutBuffer<T>>,
+        lines: &mut Vec<LineRecord<T>>,
+        fragments: &[layout_utl::GlyphFragment<T>],
         allow_leading_space: bool,
         max_width: Option<f32>,
         wrap_style: WrapStyle,
@@ -531,8 +558,8 @@ impl TextData {
     /// Empty lines still carry metrics when the font provides them so the
     /// caller can reserve vertical space for blank rows.
     fn finalize_line(
-        line_buf: &mut Option<layout_utl::LayoutBuffer>,
-        lines: &mut Vec<LineRecord>,
+        line_buf: &mut Option<layout_utl::LayoutBuffer<T>>,
+        lines: &mut Vec<LineRecord<T>>,
         metrics: Option<fontdue::LineMetrics>,
     ) {
         if line_buf.is_some() || metrics.is_some() {
@@ -548,8 +575,8 @@ impl TextData {
     /// This is used when a wrapping decision forces a break before the incoming
     /// fragments have been appended.
     fn push_line_buffer(
-        line_buf: &mut Option<layout_utl::LayoutBuffer>,
-        lines: &mut Vec<LineRecord>,
+        line_buf: &mut Option<layout_utl::LayoutBuffer<T>>,
+        lines: &mut Vec<LineRecord<T>>,
     ) {
         if line_buf.is_some() {
             lines.push(LineRecord {
@@ -641,7 +668,7 @@ mod layout_utl {
     ///
     /// Storing the font handle allows kerning to be applied without repeatedly
     /// fetching the same font from storage.
-    pub struct GlyphFragment {
+    pub struct GlyphFragment<T> {
         pub ch: char,
         pub glyph_idx: u16,
         pub metrics: fontdue::Metrics,
@@ -649,6 +676,7 @@ mod layout_utl {
         pub font_id: fontdb::ID,
         pub font_size: f32,
         pub font: Arc<fontdue::Font>,
+        pub user_data: T,
     }
 
     /// Buffer of glyph positions with origin located on the baseline.
@@ -656,7 +684,7 @@ mod layout_utl {
     /// Layout buffers are concatenated as new fragments are processed, letting
     /// us calculate kerning-aware widths before the final glyph positions are
     /// produced.
-    pub struct LayoutBuffer {
+    pub struct LayoutBuffer<T> {
         pub instance_length: f32,
 
         pub max_accent: f32,
@@ -672,10 +700,10 @@ mod layout_utl {
         pub last_metrics: fontdue::Metrics,
         pub last_origin_x: f32,
 
-        pub glyphs: Vec<GlyphPosition>,
+        pub glyphs: Vec<GlyphPosition<T>>,
     }
 
-    impl LayoutBuffer {
+    impl<T: Clone> LayoutBuffer<T> {
         /// Creates a buffer containing a single glyph fragment.
         ///
         /// The glyph is stored relative to the baseline so it can be shifted
@@ -686,6 +714,7 @@ mod layout_utl {
             line_metrics: &fontdue::LineMetrics,
             font_id: fontdb::ID,
             font_size: f32,
+            user_data: T,
         ) -> Self {
             let mut buffer = Self {
                 instance_length: metrics.width as f32 + metrics.xmin as f32,
@@ -707,6 +736,7 @@ mod layout_utl {
                 glyph_id: GlyphId::new(font_id, glyph_idx, font_size),
                 x: metrics.xmin as f32,
                 y: -(metrics.ymin as f32 + metrics.height as f32),
+                user_data,
             });
 
             buffer
@@ -725,6 +755,7 @@ mod layout_utl {
             font: &fontdue::Font,
             font_id: fontdb::ID,
             font_size: f32,
+            user_data: T,
             _font_storage: &mut FontStorage,
         ) {
             let advance_kerned = if self.last_font_id == font_id
@@ -772,6 +803,7 @@ mod layout_utl {
                 glyph_id: GlyphId::new(font_id, glyph_idx, font_size),
                 x: new_origin_x + metrics.xmin as f32,
                 y: -(metrics.ymin as f32 + metrics.height as f32),
+                user_data,
             });
         }
 
@@ -780,7 +812,7 @@ mod layout_utl {
         /// When the buffers originate from the same font and size we apply
         /// kerning between the boundary glyphs; otherwise the buffers are joined
         /// using the recorded advance of the current buffer.
-        pub fn concat(&mut self, other: LayoutBuffer, font_storage: &mut FontStorage) {
+        pub fn concat(&mut self, other: LayoutBuffer<T>, font_storage: &mut FontStorage) {
             let advance_kerned = if self.last_font_id == other.first_font_id
                 && (self.last_font_size - other.first_font_size).abs() < f32::EPSILON
             {
@@ -831,7 +863,7 @@ mod layout_utl {
         /// cloning or re-layout work.
         pub fn projected_concat_length(
             &self,
-            other: &LayoutBuffer,
+            other: &LayoutBuffer<T>,
             font_storage: &mut FontStorage,
         ) -> f32 {
             let advance_kerned = if self.last_font_id == other.first_font_id
@@ -866,9 +898,9 @@ mod layout_utl {
         /// `None` is returned when the slice is empty because there are no
         /// glyphs to measure or position.
         pub fn from_fragments(
-            fragments: &[GlyphFragment],
+            fragments: &[GlyphFragment<T>],
             font_storage: &mut FontStorage,
-        ) -> Option<LayoutBuffer> {
+        ) -> Option<LayoutBuffer<T>> {
             let first = fragments.first()?;
             let mut buffer = LayoutBuffer::new(
                 first.glyph_idx,
@@ -876,6 +908,7 @@ mod layout_utl {
                 &first.line_metrics,
                 first.font_id,
                 first.font_size,
+                first.user_data.clone(),
             );
 
             for fragment in fragments.iter().skip(1) {
@@ -886,6 +919,7 @@ mod layout_utl {
                     fragment.font.as_ref(),
                     fragment.font_id,
                     fragment.font_size,
+                    fragment.user_data.clone(),
                     font_storage,
                 );
             }

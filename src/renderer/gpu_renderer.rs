@@ -23,20 +23,20 @@ impl GpuRenderer {
         self.cache.clear();
     }
 
-    pub fn render(
+    pub fn render<T>(
         &mut self,
-        layout: &TextLayout,
+        layout: &TextLayout<T>,
         font_storage: &mut FontStorage,
-        mut f: impl FnMut(&GlyphPosition, &GlyphCacheItem),
+        mut f: impl FnMut(&GlyphPosition<T>, &GlyphCacheItem),
     ) {
         todo!()
     }
 
-    pub fn render_true_order(
+    pub fn render_true_order<T: Clone + Eq + std::hash::Hash>(
         &mut self,
-        layout: &TextLayout,
+        layout: &TextLayout<T>,
         font_storage: &mut FontStorage,
-        mut f: impl FnMut(&GlyphPosition, &GlyphCacheItem),
+        mut f: impl FnMut(&GlyphPosition<T>, &GlyphCacheItem),
     ) {
         let mut not_yet_rendered = layout
             .lines
@@ -56,7 +56,7 @@ impl GpuRenderer {
                     .cache
                     .get_and_protect_entry(&glyph.glyph_id, font_storage)
                 {
-                    render_in_this_batch.push((glyph, cached_glyph));
+                    render_in_this_batch.push((glyph.clone(), cached_glyph));
                     pingpong_set.insert(glyph);
                 }
             }
@@ -69,7 +69,7 @@ impl GpuRenderer {
                     .cache
                     .get_and_push_with_evicting_unprotected(&glyph.glyph_id, font_storage)
                 {
-                    render_in_this_batch.push((glyph, cached_glyph));
+                    render_in_this_batch.push((glyph.clone(), cached_glyph));
                     pingpong_set.insert(glyph);
                 }
             }
