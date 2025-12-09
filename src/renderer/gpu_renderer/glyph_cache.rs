@@ -295,6 +295,7 @@ mod cache_state {
     }
 }
 
+#[derive(Clone)]
 pub struct GlyphAtlasConfig {
     pub tile_size: NonZeroUsize,
     pub tiles_per_axis: NonZeroUsize,
