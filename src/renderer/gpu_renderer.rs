@@ -51,9 +51,9 @@ impl GpuRenderer {
         &mut self,
         layout: &TextLayout<T>,
         font_storage: &mut FontStorage,
-        update_atlas: &mut impl FnMut(Vec<AtlasUpdate>),
-        draw_instances: &mut impl FnMut(Vec<GlyphInstance<T>>),
-        draw_standalone: &mut impl FnMut(StandaloneGlyph<T>),
+        update_atlas: &mut impl FnMut(&[AtlasUpdate]),
+        draw_instances: &mut impl FnMut(&[GlyphInstance<T>]),
+        draw_standalone: &mut impl FnMut(&StandaloneGlyph<T>),
     ) {
         let mut update_atlas_list: Vec<AtlasUpdate> = Vec::new();
         let mut instance_list: Vec<GlyphInstance<T>> = Vec::new();
@@ -82,14 +82,16 @@ impl GpuRenderer {
                     Some(glyph_cache_item) => glyph_cache_item,
                     None => {
                         // upload all new glyph data to atlas
-                        let mut pop = Vec::new();
-                        std::mem::swap(&mut pop, &mut update_atlas_list);
-                        update_atlas(pop);
+                        if !update_atlas_list.is_empty() {
+                            update_atlas(&update_atlas_list);
+                            update_atlas_list.clear();
+                        }
 
                         // draw call
-                        let mut pop = Vec::new();
-                        std::mem::swap(&mut pop, &mut instance_list);
-                        draw_instances(pop);
+                        if !instance_list.is_empty() {
+                            draw_instances(&instance_list);
+                            instance_list.clear();
+                        }
 
                         self.cache.new_batch();
                         let Some(glyph_cache_item) =
@@ -112,7 +114,7 @@ impl GpuRenderer {
                                 user_data: *user_data,
                             };
 
-                            draw_standalone(isolate);
+                            draw_standalone(&isolate);
 
                             continue 'glyph_loop;
                         };
@@ -163,11 +165,11 @@ impl GpuRenderer {
         }
 
         if !update_atlas_list.is_empty() {
-            update_atlas(update_atlas_list);
+            update_atlas(&update_atlas_list);
         }
 
         if !instance_list.is_empty() {
-            draw_instances(instance_list);
+            draw_instances(&instance_list);
         }
     }
 }
