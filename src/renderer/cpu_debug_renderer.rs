@@ -43,7 +43,7 @@ impl CpuDebugRenderer {
         self.gpu_renderer.render(
             layout,
             font_storage,
-            &mut |updates: Vec<AtlasUpdate>| {
+            &mut |updates: &[AtlasUpdate]| {
                 let mut atlases = self.atlases.borrow_mut();
                 for update in updates {
                     let atlas = &mut atlases[update.texture_index];
@@ -62,7 +62,7 @@ impl CpuDebugRenderer {
                     }
                 }
             },
-            &mut |instances: Vec<GlyphInstance<T>>| {
+            &mut |instances: &[GlyphInstance<T>]| {
                 let mut target_buffer = target_cell.borrow_mut();
                 let atlases = self.atlases.borrow();
                 for instance in instances {
@@ -142,7 +142,7 @@ impl CpuDebugRenderer {
                     }
                 }
             },
-            &mut |standalone: StandaloneGlyph<T>| {
+            &mut |standalone: &StandaloneGlyph<T>| {
                 let mut target_buffer = target_cell.borrow_mut();
                 let color = standalone.user_data.to_color();
                 let src_w = standalone.width;

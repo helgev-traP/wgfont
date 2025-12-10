@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
 
-use euclid::num::Ceil;
 use fxhash::FxBuildHasher;
 use image::{ImageBuffer, Rgba};
 use wgfont::{
@@ -85,6 +84,7 @@ fn main() {
     pollster::block_on(run());
 }
 
+#[allow(clippy::unwrap_used)]
 async fn run() {
     // 1. Setup wgpu
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -117,6 +117,7 @@ async fn run() {
     let queue = std::sync::Arc::new(queue);
 
     // 2. Setup WgpuRenderer
+    #[allow(clippy::unwrap_used)]
     let configs = vec![
         GlyphAtlasConfig {
             tile_size: NonZeroUsize::new(32).unwrap(),

@@ -400,11 +400,11 @@ impl WgpuRenderer {
         self.gpu_renderer.render(
             layout,
             font_storage,
-            &mut |updates: Vec<AtlasUpdate>| {
+            &mut |updates: &[AtlasUpdate]| {
                 self.resources
                     .update_atlas(&mut encoder_cell.borrow_mut(), updates);
             },
-            &mut |instances: Vec<GlyphInstance<T>>| {
+            &mut |instances: &[GlyphInstance<T>]| {
                 self.resources.draw_instances(
                     &mut encoder_cell.borrow_mut(),
                     view,
@@ -412,7 +412,7 @@ impl WgpuRenderer {
                     instances,
                 );
             },
-            &mut |standalone: StandaloneGlyph<T>| {
+            &mut |standalone: &StandaloneGlyph<T>| {
                 self.resources.draw_standalone(
                     &mut encoder_cell.borrow_mut(),
                     view,
@@ -425,7 +425,7 @@ impl WgpuRenderer {
 }
 
 impl WgpuResources {
-    fn update_atlas(&self, encoder: &mut wgpu::CommandEncoder, updates: Vec<AtlasUpdate>) {
+    fn update_atlas(&self, encoder: &mut wgpu::CommandEncoder, updates: &[AtlasUpdate]) {
         for update in updates {
             let width = update.width as u32;
             let height = update.height as u32;
@@ -494,7 +494,7 @@ impl WgpuResources {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         current_offset: &std::cell::Cell<u64>,
-        instances: Vec<GlyphInstance<T>>,
+        instances: &[GlyphInstance<T>],
     ) {
         if instances.is_empty() {
             return;
@@ -590,7 +590,7 @@ impl WgpuResources {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         current_offset: &std::cell::Cell<u64>,
-        standalone: StandaloneGlyph<T>,
+        standalone: &StandaloneGlyph<T>,
     ) {
         let mut resources_ref = self.standalone_resources.borrow_mut();
         let mut instance_buffer = self.instance_buffer.borrow_mut();
@@ -664,7 +664,9 @@ impl WgpuResources {
             });
         }
 
-        let resources = resources_ref.as_ref().unwrap();
+        let resources = resources_ref.as_ref().expect(
+            "Logic bug: resources_ref should be initialized. If it was previously None, the 'recreate' flag ensures it is initialized above.",
+        );
 
         // Prepare data with 256-byte alignment for copy_buffer_to_texture
         let width = standalone.width as u32;
