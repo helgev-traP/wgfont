@@ -1,7 +1,21 @@
 [package]
-name = "wgfont"
+name = "suzuri"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Text rendering library"
+repository = "https://github.com/helgev-traP/suzuri"
+documentation = "https://docs.rs/suzuri"
+readme = "README.md"
+keywords = ["text", "rendering", "font", "graphics"]
+categories = ["gui", "graphics", "text-processing"]
+
+include = [
+    "src/**",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE*"
+]
 
 [dependencies]
 euclid = "0.22.11"
