@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use image::{ImageBuffer, Rgb};
-use suzuri::{font_storage::FontStorage, renderer::CpuRenderer};
+use suzuri::{FontSystem, renderer::CpuCacheConfig};
 
 mod example_common;
 use example_common::{TextColor, WIDTH, build_text_data, load_fonts, make_layout_config};
@@ -10,13 +10,13 @@ use example_common::{TextColor, WIDTH, build_text_data, load_fonts, make_layout_
 fn main() {
     let config = make_layout_config(Some(WIDTH), None);
 
-    let mut font_storage = FontStorage::new();
-    let (heading_font, body_font, mono_font) = load_fonts(&mut font_storage);
+    let font_system = FontSystem::new();
+    let (heading_font, body_font, mono_font) = load_fonts(&font_system);
     let data = build_text_data(heading_font, body_font, mono_font);
 
     // Layout
     let layout_timer = std::time::Instant::now();
-    let layout = data.layout(&config, &mut font_storage);
+    let layout = font_system.layout_text(&data, &config);
     let layout_elapsed = layout_timer.elapsed();
 
     println!(
@@ -32,16 +32,16 @@ fn main() {
 
     // Initialize CpuRenderer
     let cache_config = [
-        suzuri::renderer::cpu_renderer::CpuCacheConfig {
+        CpuCacheConfig {
             block_size: NonZeroUsize::new(1024).unwrap(), // Block size (e.g. 32x32)
             capacity: NonZeroUsize::new(1024).unwrap(),   // Capacity
         },
-        suzuri::renderer::cpu_renderer::CpuCacheConfig {
+        CpuCacheConfig {
             block_size: NonZeroUsize::new(4096).unwrap(), // Block size (e.g. 64x64)
             capacity: NonZeroUsize::new(256).unwrap(),    // Capacity
         },
     ];
-    let mut renderer = CpuRenderer::new(&cache_config);
+    font_system.cpu_init(&cache_config);
 
     // Render
     // Note: CPU renderer is Grayscale-only (coverage), so we'll render to a colored image manually
@@ -57,10 +57,9 @@ fn main() {
         // Actually, let's just draw.
         // Note: The second pass will blend onto the first pass result, making it brighter/messier, but timing is what matters.
 
-        renderer.render(
+        font_system.cpu_render(
             &layout,
             [bitmap_width, bitmap_height],
-            &mut font_storage,
             &mut |pos, alpha, color: &TextColor| {
                 let alpha_f = alpha as f32 / 255.0;
                 if alpha_f <= 0.0 {

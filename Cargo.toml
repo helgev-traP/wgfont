@@ -10,12 +10,7 @@ readme = "README.md"
 keywords = ["text", "rendering", "font", "graphics"]
 categories = ["gui", "graphics", "text-processing"]
 
-include = [
-    "src/**",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE*"
-]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 euclid = "^0.22.11"

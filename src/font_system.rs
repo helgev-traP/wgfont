@@ -17,10 +17,13 @@ use crate::renderer::WgpuRenderer;
 
 /// High-level entry point for the text rendering system.
 ///
-/// This struct coordinates `FontStorage`, `TextLayout`, and various renderers (CPU, GPU, WGPU).
+/// This struct coordinates `FontStorage`, `TextLayout`, and various renderers (CPU, GPU, and WGPU if "wgpu" feature is enabled).
 /// It provides a unified interface for loading fonts, laying out text, and rendering it.
 ///
 /// Use `Mutex` to allow shared mutable access, which is common in UI frameworks.
+///
+/// The fields are public to allow direct access to the underlying storage and renderers when necessary
+/// (e.g. for performance reasons or zero-allocation access).
 pub struct FontSystem {
     /// The underlying font storage.
     pub font_storage: Mutex<FontStorage>,
@@ -121,6 +124,10 @@ impl FontSystem {
     }
 
     /// Returns the name of a family.
+    ///
+    /// # Performance
+    /// This method allocates a new `String` to avoid holding a lock on the storage.
+    /// If you need zero-allocation access, lock `font_storage` directly.
     pub fn family_name<'a>(&'a self, family: &'a fontdb::Family<'_>) -> String {
         self.font_storage.lock().family_name(family).to_string()
     }
@@ -138,7 +145,20 @@ impl FontSystem {
         self.font_storage.lock().font(id)
     }
 
+    /// Returns a vec over all available faces.
+    ///
+    /// # Performance
+    /// This method clones all face info to avoid holding a lock on the storage.
+    /// If you need to iterate without allocation, lock `font_storage` directly.
+    pub fn faces(&self) -> Vec<fontdb::FaceInfo> {
+        self.font_storage.lock().faces().cloned().collect()
+    }
+
     /// Returns face info for an ID.
+    ///
+    /// # Performance
+    /// This method clones the face info to avoid holding a lock on the storage.
+    /// If you need reference access, lock `font_storage` directly.
     pub fn face(&self, id: fontdb::ID) -> Option<fontdb::FaceInfo> {
         self.font_storage.lock().face(id).cloned()
     }

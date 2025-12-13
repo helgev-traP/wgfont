@@ -4,9 +4,9 @@ use std::time::Instant;
 
 use fxhash::FxBuildHasher;
 use suzuri::{
-    font_storage::FontStorage,
+    FontSystem,
     fontdb::{self, Family, Query},
-    renderer::{CpuRenderer, debug_renderer},
+    renderer::{CpuCacheConfig, debug_renderer},
     text::{HorizontalAlign, TextData, TextElement, TextLayoutConfig, VerticalAlign, WrapStyle},
 };
 
@@ -35,10 +35,10 @@ fn make_config(max_width: Option<f32>, max_height: Option<f32>) -> TextLayoutCon
     }
 }
 
-fn pick_system_font(font_storage: &mut FontStorage) -> fontdb::ID {
-    font_storage.load_system_fonts();
+fn pick_system_font(font_system: &FontSystem) -> fontdb::ID {
+    font_system.load_system_fonts();
     assert!(
-        !font_storage.is_empty(),
+        !font_system.is_empty(),
         "system fonts are required for the text layout test"
     );
 
@@ -50,13 +50,13 @@ fn pick_system_font(font_storage: &mut FontStorage) -> fontdb::ID {
         style: fontdb::Style::Normal,
     };
 
-    if let Some((font_id, _)) = font_storage.query(&query) {
+    if let Some((font_id, _)) = font_system.query(&query) {
         return font_id;
     }
 
-    font_storage
+    font_system
         .faces()
-        .next()
+        .first()
         .map(|face| face.id)
         .expect("no usable fonts registered in FontStorage")
 }
@@ -69,8 +69,8 @@ fn main() {
         make_config(max_width, max_height)
     };
 
-    let mut font_storage = FontStorage::new();
-    let font_id = pick_system_font(&mut font_storage);
+    let font_system = FontSystem::new();
+    let font_id = pick_system_font(&font_system);
 
     // Create a reasonably long text to make the rendering work significant
     let mut data = TextData::new();
@@ -89,7 +89,7 @@ fn main() {
 
     // Perform layout once
     println!("Performing layout...");
-    let layout = data.layout(&config, &mut font_storage);
+    let layout = font_system.layout_text(&data, &config);
     println!(
         "Layout ready: {} lines, size: {}x{}",
         layout.lines.len(),
@@ -108,8 +108,11 @@ fn main() {
     {
         let start = Instant::now();
         for _ in 0..iterations {
-            let bitmap =
-                debug_renderer::render_layout_to_bitmap(&layout, image_size, &mut font_storage);
+            let bitmap = debug_renderer::render_layout_to_bitmap(
+                &layout,
+                image_size,
+                &mut font_system.font_storage.lock(),
+            );
             // Prevent optimization
             std::hint::black_box(bitmap);
         }
@@ -126,26 +129,23 @@ fn main() {
         // Configure cache
         // Configure cache
         let cache_config = [
-            suzuri::renderer::cpu_renderer::CpuCacheConfig {
+            CpuCacheConfig {
                 block_size: NonZeroUsize::new(512).unwrap(), // Block size
                 capacity: NonZeroUsize::new(128).unwrap(),   // Capacity
             },
-            suzuri::renderer::cpu_renderer::CpuCacheConfig {
+            CpuCacheConfig {
                 block_size: NonZeroUsize::new(1024).unwrap(),
                 capacity: NonZeroUsize::new(128).unwrap(),
             },
         ];
-        let mut renderer = CpuRenderer::new(&cache_config);
+        font_system.cpu_init(&cache_config);
 
         // Warmup / First run (includes caching overhead)
         let start_first = Instant::now();
         let mut bitmap = debug_renderer::Bitmap::new(image_size[0], image_size[1]);
-        renderer.render(
-            &layout,
-            image_size,
-            &mut font_storage,
-            &mut |pos, alpha, _| bitmap.accumulate(pos[0], pos[1], alpha),
-        );
+        font_system.cpu_render(&layout, image_size, &mut |pos, alpha, _| {
+            bitmap.accumulate(pos[0], pos[1], alpha)
+        });
         std::hint::black_box(bitmap);
         let duration_first = start_first.elapsed();
         println!("Cpu Renderer (First Run): {:.2?}", duration_first);
@@ -154,12 +154,9 @@ fn main() {
         let start = Instant::now();
         for _ in 0..iterations {
             let mut bitmap = debug_renderer::Bitmap::new(image_size[0], image_size[1]);
-            renderer.render(
-                &layout,
-                image_size,
-                &mut font_storage,
-                &mut |pos, alpha, _| bitmap.accumulate(pos[0], pos[1], alpha),
-            );
+            font_system.cpu_render(&layout, image_size, &mut |pos, alpha, _| {
+                bitmap.accumulate(pos[0], pos[1], alpha)
+            });
             std::hint::black_box(bitmap);
         }
         let duration = start.elapsed();

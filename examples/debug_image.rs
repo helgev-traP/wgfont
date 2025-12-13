@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Luma};
-use suzuri::{font_storage::FontStorage, renderer::debug_renderer};
+use suzuri::{FontSystem, renderer::debug_renderer};
 
 mod example_common;
 use example_common::{WIDTH, build_text_data, load_fonts, make_layout_config};
@@ -8,12 +8,12 @@ use example_common::{WIDTH, build_text_data, load_fonts, make_layout_config};
 fn main() {
     let config = make_layout_config(Some(WIDTH), None);
 
-    let mut font_storage = FontStorage::new();
-    let (heading_font, body_font, mono_font) = load_fonts(&mut font_storage);
+    let font_system = FontSystem::new();
+    let (heading_font, body_font, mono_font) = load_fonts(&font_system);
     let data = build_text_data(heading_font, body_font, mono_font);
 
     let timer = std::time::Instant::now();
-    let layout = data.layout(&config, &mut font_storage);
+    let layout = font_system.layout_text(&data, &config);
     let elapsed = timer.elapsed();
     println!(
         "Layout: {:.2}x{:.2} lines={} (elapsed: {:.2?})",
@@ -34,7 +34,7 @@ fn main() {
         let bitmap = debug_renderer::render_layout_to_bitmap(
             &layout,
             [bitmap_width, bitmap_height],
-            &mut font_storage,
+            &mut font_system.font_storage.lock(),
         );
         measurements.push(render_timer.elapsed());
         last_bitmap = Some(bitmap);

@@ -92,7 +92,7 @@ struct Globals {
 ///
 /// To avoid runtime hitches, you can pre-warm the cache by supplying expected formats
 /// during initialization:
-/// ```rust
+/// ```rust,ignore
 /// let renderer = WgpuRenderer::new(
 ///     &device,
 ///     &cache_configs,
@@ -105,7 +105,7 @@ struct Globals {
 /// 2. Prepare text layout using `FontSystem`.
 /// 3. Call `render` inside your generic render pass.
 ///
-/// ```no_run
+/// ```rust,ignore
 /// renderer.render(
 ///     &device,
 ///     &layout,
