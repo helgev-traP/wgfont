@@ -44,21 +44,20 @@ suzuri = { version = "0.1.0", features = ["wgpu"] }
 
 ## Usage / 使い方
 
-### 1. Prepare Fonts / フォントの準備
+### 1. Initialize FontSystem / FontSystemの初期化
 
-Use `FontStorage` to load fonts. You can load system fonts or query specific fonts.
+`FontSystem` is the entry point for Suzuri. It handles font loading, layout, and renderer management.
 
-`FontStorage` を使用してフォントを読み込みます。システムフォントをロードしたり、特定のフォントをクエリすることができます。
+`FontSystem` は Suzuri のエントリーポイントです。フォントの読み込み、レイアウト、レンダラーの管理を一括して行います。
 
 ```rust
-use suzuri::font_storage::FontStorage;
-use suzuri::fontdb::{self, Family, Query};
+use suzuri::{FontSystem, fontdb::{self, Family, Query}};
 
-let mut font_storage = FontStorage::new();
-font_storage.load_system_fonts();
+let font_system = FontSystem::new();
+font_system.load_system_fonts();
 
 // Query a font / フォントの検索
-let font_id = font_storage
+let font_id = font_system
     .query(&Query {
         families: &[Family::Name("Arial"), Family::SansSerif],
         weight: fontdb::Weight::NORMAL,
@@ -86,12 +85,20 @@ use suzuri::text::{TextData, TextElement};
 #[derive(Clone, Copy, Debug)]
 struct MyColor { r: f32, g: f32, b: f32, a: f32 }
 
+// For wgpu rendering, convert to [f32; 4] (Premultiplied Alpha)
+// wgpuレンダリングのために [f32; 4] (Premultiplied Alpha) へ変換します
+impl From<MyColor> for [f32; 4] {
+    fn from(c: MyColor) -> Self {
+        [c.r * c.a, c.g * c.a, c.b * c.a, c.a]
+    }
+}
+
 let mut data = TextData::new();
 data.append(TextElement {
-    text: "Hello, Suzuri!".to_string(),
+    content: "Hello, Suzuri!".to_string(),
     font_id,
-    size: 32.0,
-    color: MyColor { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
+    font_size: 32.0,
+    user_data: MyColor { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
 });
 ```
 
@@ -114,20 +121,19 @@ let config = TextLayoutConfig {
     ..Default::default()
 };
 
-let layout = data.layout(&config, &mut font_storage);
+let layout = font_system.layout_text(&data, &config);
 ```
 
 ### 4. Rendering / レンダリング
 
 #### GPU Rendering (wgpu) / GPUレンダリング (wgpu)
 
-Use `WgpuRenderer` to draw. You need to set up `wgpu::Device` and `wgpu::Queue` beforehand.
+Initialize the renderer and draw inside a render pass.
 
-`WgpuRenderer` を使用して描画します。事前に `wgpu::Device` や `wgpu::Queue` のセットアップが必要です。
+レンダラーを初期化し、レンダーパス内で描画します。
 
 ```rust
-use suzuri::renderer::wgpu_renderer::WgpuRenderer;
-use suzuri::renderer::gpu_renderer::GpuCacheConfig;
+use suzuri::renderer::GpuCacheConfig;
 use std::num::NonZeroUsize;
 
 // Cache configuration / キャッシュ設定
@@ -139,23 +145,32 @@ let cache_configs = vec![
     },
 ];
 
-let mut renderer = WgpuRenderer::new(&device, &cache_configs, &[texture_format]);
+// Initialize (one-time)
+font_system.wgpu_init(&device, &cache_configs, &[texture_format]);
 
-// Draw inside a render pass / レンダーパス内での描画
-renderer.render(&layout, &device, &queue, &mut rpass);
+// Draw inside a render pass
+font_system.wgpu_render(&layout, &device, &mut encoder, &view);
 ```
 
 #### CPU Rendering / CPUレンダリング
 
-Use `CpuRenderer` to get pixel data.
+Use `cpu_render` to get pixel data in a callback.
 
-`CpuRenderer` を使用してピクセルデータを取得します。
+`cpu_render` を使用して、コールバック内でピクセルデータを取得します。
 
 ```rust
-use suzuri::renderer::cpu_renderer::CpuRenderer;
+use suzuri::renderer::CpuCacheConfig;
 
-let mut renderer = CpuRenderer::new();
-let pixel_buffer = renderer.render(&layout, &mut font_storage);
+// Initialize
+// font_system.cpu_init(...);
+
+font_system.cpu_render(
+    &layout,
+    image_size, // [usize; 2]
+    &mut |pos, alpha, user_data| {
+        // process pixel
+    }
+);
 ```
 
 ## License / ライセンス

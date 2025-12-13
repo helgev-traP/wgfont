@@ -1,13 +1,16 @@
 pub mod cpu_renderer;
-pub mod debug_renderer;
 pub mod gpu_renderer;
 
-#[cfg(feature = "wgpu")]
-pub mod cpu_debug_renderer;
+pub use cpu_renderer::{CpuCacheConfig, CpuRenderer};
+pub use gpu_renderer::{AtlasUpdate, GlyphInstance, GpuCacheConfig, GpuRenderer, StandaloneGlyph};
+
 #[cfg(feature = "wgpu")]
 pub mod wgpu_renderer;
 #[cfg(feature = "wgpu")]
-pub use wgpu_renderer::WgpuRenderer;
+pub use wgpu_renderer::{WgpuRenderPassController, WgpuRenderer};
 
-pub use cpu_renderer::CpuRenderer;
-pub use gpu_renderer::GpuRenderer;
+// debug uses
+#[cfg(all(debug_assertions, feature = "wgpu"))]
+pub mod cpu_debug_renderer;
+#[cfg(debug_assertions)]
+pub mod debug_renderer;

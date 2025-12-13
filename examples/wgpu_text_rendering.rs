@@ -1,10 +1,7 @@
 use std::num::NonZeroUsize;
 
 use image::{ImageBuffer, Rgba};
-use suzuri::{
-    font_storage::FontStorage,
-    renderer::{gpu_renderer::GpuCacheConfig, wgpu_renderer::WgpuRenderer},
-};
+use suzuri::{FontSystem, renderer::GpuCacheConfig};
 
 mod example_common;
 use example_common::{WIDTH, build_text_data, load_fonts, make_layout_config};
@@ -62,17 +59,18 @@ async fn run() {
     ];
 
     let texture_format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut renderer = WgpuRenderer::new(&device, &configs, &[texture_format]);
 
-    // 3. Setup Text Layout
+    // 3. Setup Text Layout and FontSystem
     let config = make_layout_config(Some(WIDTH), None);
 
-    let mut font_storage = FontStorage::new();
-    let (heading_font, body_font, mono_font) = load_fonts(&mut font_storage);
+    let font_system = FontSystem::new();
+    let (heading_font, body_font, mono_font) = load_fonts(&font_system);
     let data = build_text_data(heading_font, body_font, mono_font);
 
+    font_system.wgpu_init(&device, &configs, &[texture_format]);
+
     let layout_timer = std::time::Instant::now();
-    let layout = data.layout(&config, &mut font_storage);
+    let layout = font_system.layout_text(&data, &config);
     let layout_elapsed = layout_timer.elapsed();
 
     println!(
@@ -140,13 +138,7 @@ async fn run() {
         }
 
         let start = std::time::Instant::now();
-        renderer.render(
-            &layout,
-            &mut font_storage,
-            &device,
-            &mut encoder,
-            &target_view,
-        );
+        font_system.wgpu_render(&layout, &device, &mut encoder, &target_view);
         measurements.push(start.elapsed());
 
         if i == 1 {

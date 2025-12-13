@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use fxhash::FxBuildHasher;
 use suzuri::{
-    font_storage::FontStorage,
+    FontSystem,
     fontdb::{self, Family, Query},
     text::{HorizontalAlign, TextData, TextElement, TextLayoutConfig, VerticalAlign, WrapStyle},
 };
@@ -102,11 +102,11 @@ pub fn make_layout_config(max_width: Option<f32>, max_height: Option<f32>) -> Te
     }
 }
 
-pub fn load_fonts(font_storage: &mut FontStorage) -> (fontdb::ID, fontdb::ID, fontdb::ID) {
-    font_storage.load_system_fonts();
+pub fn load_fonts(font_system: &FontSystem) -> (fontdb::ID, fontdb::ID, fontdb::ID) {
+    font_system.load_system_fonts();
 
     // Attempt to load some specific fonts or fallback to generic families
-    let heading_font = font_storage
+    let heading_font = font_system
         .query(&Query {
             families: &[Family::Name("Arial"), Family::SansSerif],
             weight: fontdb::Weight::BOLD,
@@ -114,9 +114,9 @@ pub fn load_fonts(font_storage: &mut FontStorage) -> (fontdb::ID, fontdb::ID, fo
             style: fontdb::Style::Normal,
         })
         .map(|(id, _)| id)
-        .unwrap_or_else(|| font_storage.faces().next().unwrap().id);
+        .unwrap_or_else(|| font_system.faces().first().unwrap().id);
 
-    let body_font = font_storage
+    let body_font = font_system
         .query(&Query {
             families: &[Family::Name("Times New Roman"), Family::Serif],
             weight: fontdb::Weight::NORMAL,
@@ -126,7 +126,7 @@ pub fn load_fonts(font_storage: &mut FontStorage) -> (fontdb::ID, fontdb::ID, fo
         .map(|(id, _)| id)
         .unwrap_or(heading_font);
 
-    let mono_font = font_storage
+    let mono_font = font_system
         .query(&Query {
             families: &[Family::Name("Consolas"), Family::Monospace],
             weight: fontdb::Weight::NORMAL,
