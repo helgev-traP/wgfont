@@ -441,7 +441,7 @@ impl<T: WgpuRenderPassController + ?Sized> WgpuRenderPassController for &mut T {
 impl WgpuRenderer {
     pub fn render<T: Into<[f32; 4]> + Copy>(
         &mut self,
-        layout: &TextLayout<T>,
+        text_layout: &TextLayout<T>,
         font_storage: &mut FontStorage,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
@@ -499,7 +499,7 @@ impl WgpuRenderer {
             first_call: true,
         };
 
-        self.render_to(layout, font_storage, device, &mut ctx);
+        self.render_to(text_layout, font_storage, device, &mut ctx);
     }
 
     /// Renders the layout using a custom render pass controller.
@@ -508,7 +508,7 @@ impl WgpuRenderer {
     /// creation or management is handled externally via the `WgpuRenderPassController` trait.
     pub fn render_to<T: Into<[f32; 4]> + Copy>(
         &mut self,
-        layout: &TextLayout<T>,
+        text_layout: &TextLayout<T>,
         font_storage: &mut FontStorage,
         device: &wgpu::Device,
         controller: &mut impl WgpuRenderPassController,
@@ -539,7 +539,7 @@ impl WgpuRenderer {
 
         // Delegate to GpuRenderer to calculate layout and cache glyphs
         self.gpu_renderer.render(
-            layout,
+            text_layout,
             font_storage,
             // Callback: Update Texture Atlas
             &mut |updates: &[AtlasUpdate]| {

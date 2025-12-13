@@ -1,8 +1,7 @@
-mod glyph_cache;
-
 use crate::font_storage::FontStorage;
 use crate::text::{GlyphPosition, TextLayout};
 
+mod glyph_cache;
 pub use glyph_cache::{CpuCache, CpuCacheConfig, CpuCacheItem};
 
 /// CPU-based renderer that rasterizes glyphs using a cache.
