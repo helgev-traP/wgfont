@@ -37,7 +37,7 @@ impl Default for TextLayoutConfig {
             vertical_align: VerticalAlign::Top,
             line_height_scale: 1.0,
             wrap_style: WrapStyle::NoWrap,
-            wrap_hard_break: false,
+            wrap_hard_break: true,
             // TODO: implement tab handling.
             word_separators: [' ', '\t', '\n', '\r'].iter().cloned().collect(),
             linebreak_char: ['\n', '\r'].iter().cloned().collect(),
