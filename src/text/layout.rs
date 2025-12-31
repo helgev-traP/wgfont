@@ -242,9 +242,7 @@ impl<T: Clone> TextData<T> {
                 };
 
                 if linebreak_char.contains(&ch) {
-                    // Newline characters always terminate the current line. If the
-                    // font provides a glyph we keep it so the renderer can emulate
-                    // visible line break marks when desired.
+                    // Newline characters always terminate the current line.
                     if let Some(word) = word_buf.take() {
                         Self::append_fragments_with_rules(
                             &mut line_buf,
@@ -258,16 +256,9 @@ impl<T: Clone> TextData<T> {
                         );
                     }
 
-                    Self::append_fragments_with_rules(
-                        &mut line_buf,
-                        &mut lines,
-                        std::slice::from_ref(&fragment),
-                        true,
-                        max_width,
-                        wrap_style,
-                        wrap_hard_break,
-                        font_storage,
-                    );
+                    // We explicitly do not append the newline glyph to the layout.
+                    // This prevents the renderer from drawing a "tofu" (missing glyph)
+                    // or other unwanted visual artifact for the control character.
                     Self::finalize_line(&mut line_buf, &mut lines, Some(line_metric));
                     continue;
                 }
