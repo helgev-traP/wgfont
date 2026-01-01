@@ -1,5 +1,10 @@
 # Suzuri
 
+[![Crates.io](https://img.shields.io/crates/v/suzuri.svg)](https://crates.io/crates/suzuri)
+[![Docs.rs](https://docs.rs/suzuri/badge.svg)](https://docs.rs/suzuri)
+![License](https://img.shields.io/crates/l/suzuri.svg)
+![Rust](https://img.shields.io/crates/msrv/suzuri)
+
 Suzuri is a text rendering library written in Rust.
 Use this crate to layout and render text with consistent results.
 
