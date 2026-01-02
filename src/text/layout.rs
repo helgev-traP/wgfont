@@ -2,6 +2,10 @@ use std::collections::HashSet;
 
 use crate::{glyph_id::GlyphId, text::TextData};
 
+/// Default tab size in spaces.
+/// TODO: Move this into TextLayoutConfig when bumping the major version.
+const TAB_SIZE_IN_SPACES: f32 = 4.0;
+
 /// Configuration knobs used by the text layout pipeline.
 ///
 /// All parameters are honored during a single `TextData::layout` call so the
@@ -294,6 +298,29 @@ impl<'a, T: Clone> LayoutEngine<'a, T> {
                         self.append_fragments_with_rules(std::slice::from_ref(&fragment), false);
                     }
                 }
+                layout_utl::CharBehavior::Tab => {
+                    // Tab character works as a word separator and also adds spacing.
+                    if let Some(word) = self.word_buf.take() {
+                        self.append_fragments_with_rules(&word, true);
+                    }
+
+                    // Ensure we have a line buffer to apply tab spacing to.
+                    if self.line_buf.is_none() {
+                        self.line_buf = Some(layout_utl::LayoutBuffer::new_empty(&line_metric));
+                    }
+
+                    if let Some(line) = self.line_buf.as_mut() {
+                        // Calculate tab width based on space width.
+                        let space_glyph_idx = font.lookup_glyph_index(' ');
+                        let space_metrics = font.metrics_indexed(space_glyph_idx, text.font_size);
+                        let tab_width = space_metrics.advance_width * TAB_SIZE_IN_SPACES;
+
+                        // Move next_origin_x to the next tab stop.
+                        let current_x = line.next_origin_x;
+                        let next_stop = (current_x / tab_width).floor() * tab_width + tab_width;
+                        line.next_origin_x = next_stop;
+                    }
+                }
                 layout_utl::CharBehavior::Regular => {
                     let fragment = create_fragment(ch);
                     if matches!(self.config.wrap_style, WrapStyle::CharWrap) {
@@ -582,6 +609,8 @@ mod layout_utl {
         LineBreak,
         /// Breaks a word but may or may not be rendered (e.g., space, tab).
         WordBreak { render_glyph: bool },
+        /// Tab character behavior (moves to next tab stop).
+        Tab,
         /// Standard character content.
         Regular,
         /// Character should be completely ignored (e.g., non-printable control chars).
@@ -599,9 +628,11 @@ mod layout_utl {
         }
 
         if word_separators.contains(&ch) {
+            if ch == '\t' {
+                return CharBehavior::Tab;
+            }
             // Render the separator only if it is NOT a control character.
-            // Spaces are not control chars, but tabs are.
-            // This prevents "tofu" rendering for tabs until proper tab support is added.
+            // Spaces are not control chars.
             return CharBehavior::WordBreak {
                 render_glyph: !ch.is_control(),
             };
@@ -642,19 +673,38 @@ mod layout_utl {
         pub max_descent: f32,
         pub max_line_gap: f32,
 
-        pub first_glyph: u16,
-        pub first_font_id: fontdb::ID,
-        pub first_font_size: f32,
-        pub last_glyph: u16,
-        pub last_font_id: fontdb::ID,
-        pub last_font_size: f32,
-        pub last_metrics: fontdue::Metrics,
-        pub last_origin_x: f32,
+        pub first_glyph: Option<u16>,
+        pub first_font_id: Option<fontdb::ID>,
+        pub first_font_size: Option<f32>,
+        pub last_glyph: Option<u16>,
+        pub last_font_id: Option<fontdb::ID>,
+        pub last_font_size: Option<f32>,
+        pub last_metrics: Option<fontdue::Metrics>,
+        pub next_origin_x: f32,
 
         pub glyphs: Vec<GlyphPosition<T>>,
     }
 
     impl<T: Clone> LayoutBuffer<T> {
+        /// Creates an empty buffer with valid line metrics but no glyphs.
+        pub fn new_empty(line_metrics: &fontdue::LineMetrics) -> Self {
+            Self {
+                instance_length: 0.0,
+                max_accent: line_metrics.ascent,
+                max_descent: line_metrics.descent,
+                max_line_gap: line_metrics.line_gap,
+                first_glyph: None,
+                first_font_id: None,
+                first_font_size: None,
+                last_glyph: None,
+                last_font_id: None,
+                last_font_size: None,
+                last_metrics: None,
+                next_origin_x: 0.0,
+                glyphs: vec![],
+            }
+        }
+
         /// Creates a buffer containing a single glyph fragment.
         ///
         /// The glyph is stored relative to the baseline so it can be shifted
@@ -672,14 +722,14 @@ mod layout_utl {
                 max_accent: line_metrics.ascent,
                 max_descent: line_metrics.descent,
                 max_line_gap: line_metrics.line_gap,
-                first_glyph: glyph_idx,
-                first_font_id: font_id,
-                first_font_size: font_size,
-                last_glyph: glyph_idx,
-                last_font_id: font_id,
-                last_font_size: font_size,
-                last_metrics: *metrics,
-                last_origin_x: 0.0,
+                first_glyph: Some(glyph_idx),
+                first_font_id: Some(font_id),
+                first_font_size: Some(font_size),
+                last_glyph: Some(glyph_idx),
+                last_font_id: Some(font_id),
+                last_font_size: Some(font_size),
+                last_metrics: Some(*metrics),
+                next_origin_x: metrics.advance_width,
                 glyphs: vec![],
             };
 
@@ -709,50 +759,39 @@ mod layout_utl {
             user_data: T,
             _font_storage: &mut FontStorage,
         ) {
-            let advance_kerned = if self.last_font_id == font_id
-                && (self.last_font_size - font_size).abs() < f32::EPSILON
+            let kerning = if let (Some(last_id), Some(last_size), Some(last_glyph)) =
+                (self.last_font_id, self.last_font_size, self.last_glyph)
+                && last_id == font_id
+                && (last_size - font_size).abs() < f32::EPSILON
             {
-                let kerning = font
-                    .horizontal_kern_indexed(self.last_glyph, glyph_idx, font_size)
-                    .unwrap_or(0.0);
-                self.last_metrics.advance_width + kerning
+                font.horizontal_kern_indexed(last_glyph, glyph_idx, font_size)
+                    .unwrap_or(0.0)
             } else {
-                // for simplicity, just ignore kerning for different font or size
-                /*
-                // use average kerning for different font or size
-
-                let kerning_of_curr_font = font
-                    .horizontal_kern_indexed(self.last_glyph, glyph_idx, font_size)
-                    .unwrap_or(0.0);
-                let kerning_of_prev_font = font_storage
-                    .font(self.last_font_id)
-                    .and_then(|f| {
-                        f.horizontal_kern_indexed(self.last_glyph, glyph_idx, self.last_font_size)
-                    })
-                    .unwrap_or(0.0);
-
-                let average_kerning = (kerning_of_curr_font + kerning_of_prev_font) / 2.0;
-
-                self.last_metrics.advance_width + average_kerning
-                */
-
-                self.last_metrics.advance_width
+                0.0
             };
 
-            let new_origin_x = self.last_origin_x + advance_kerned;
+            let current_origin_x = self.next_origin_x + kerning;
+            let new_next_origin_x = current_origin_x + metrics.advance_width;
 
-            self.instance_length = new_origin_x + metrics.width as f32 + metrics.xmin as f32;
+            self.instance_length = current_origin_x + metrics.width as f32 + metrics.xmin as f32;
             self.max_accent = self.max_accent.max(line_metrics.ascent);
             self.max_descent = self.max_descent.max(line_metrics.descent);
             self.max_line_gap = self.max_line_gap.max(line_metrics.line_gap);
-            self.last_glyph = glyph_idx;
-            self.last_font_id = font_id;
-            self.last_font_size = font_size;
-            self.last_metrics = *metrics;
-            self.last_origin_x = new_origin_x;
+
+            if self.first_glyph.is_none() {
+                self.first_glyph = Some(glyph_idx);
+                self.first_font_id = Some(font_id);
+                self.first_font_size = Some(font_size);
+            }
+
+            self.last_glyph = Some(glyph_idx);
+            self.last_font_id = Some(font_id);
+            self.last_font_size = Some(font_size);
+            self.last_metrics = Some(*metrics);
+            self.next_origin_x = new_next_origin_x;
             self.glyphs.push(GlyphPosition {
                 glyph_id: GlyphId::new(font_id, glyph_idx, font_size),
-                x: new_origin_x + metrics.xmin as f32,
+                x: current_origin_x + metrics.xmin as f32,
                 y: -(metrics.ymin as f32 + metrics.height as f32),
                 user_data,
             });
@@ -764,39 +803,61 @@ mod layout_utl {
         /// kerning between the boundary glyphs; otherwise the buffers are joined
         /// using the recorded advance of the current buffer.
         pub fn concat(&mut self, other: LayoutBuffer<T>, font_storage: &mut FontStorage) {
-            let advance_kerned = if self.last_font_id == other.first_font_id
-                && (self.last_font_size - other.first_font_size).abs() < f32::EPSILON
+            let kerning = if let (
+                Some(last_id),
+                Some(last_size),
+                Some(last_glyph),
+                Some(other_first_id),
+                Some(other_first_size),
+                Some(other_first_glyph),
+            ) = (
+                self.last_font_id,
+                self.last_font_size,
+                self.last_glyph,
+                other.first_font_id,
+                other.first_font_size,
+                other.first_glyph,
+            ) && last_id == other_first_id
+                && (last_size - other_first_size).abs() < f32::EPSILON
             {
                 let font = font_storage
-                    .font(self.last_font_id)
+                    .font(last_id)
                     .expect("font must exist in font storage");
-                let kerning = font
-                    .horizontal_kern_indexed(
-                        self.last_glyph,
-                        other.first_glyph,
-                        self.last_font_size,
-                    )
-                    .unwrap_or(0.0);
-                self.last_metrics.advance_width + kerning
+                font.horizontal_kern_indexed(last_glyph, other_first_glyph, last_size)
+                    .unwrap_or(0.0)
             } else {
-                // for simplicity, just ignore kerning for different font or size
-                self.last_metrics.advance_width
+                0.0
             };
 
-            let x_offset = self.last_origin_x + advance_kerned;
+            let x_offset = self.next_origin_x + kerning;
 
             let new_instance_length = x_offset + other.instance_length;
-            let new_origin_x = x_offset + other.last_origin_x;
+            let new_next_origin_x = x_offset + other.next_origin_x;
 
             self.instance_length = new_instance_length;
             self.max_accent = self.max_accent.max(other.max_accent);
             self.max_descent = self.max_descent.max(other.max_descent);
             self.max_line_gap = self.max_line_gap.max(other.max_line_gap);
-            self.last_glyph = other.last_glyph;
-            self.last_font_id = other.last_font_id;
-            self.last_font_size = other.last_font_size;
-            self.last_metrics = other.last_metrics;
-            self.last_origin_x = new_origin_x;
+
+            if self.first_glyph.is_none() {
+                self.first_glyph = other.first_glyph;
+                self.first_font_id = other.first_font_id;
+                self.first_font_size = other.first_font_size;
+            }
+
+            // Only update "last" fields if "other" actually has content.
+            // If other is empty, we keep our own last fields.
+            // However, "other" could be empty but have an offset (e.g. trailing tabs).
+            // But LayoutBuffer with offset usually comes from tabs, which don't have glyphs.
+            // If other has glyphs, it must have last_* fields.
+            if other.last_glyph.is_some() {
+                self.last_glyph = other.last_glyph;
+                self.last_font_id = other.last_font_id;
+                self.last_font_size = other.last_font_size;
+                self.last_metrics = other.last_metrics;
+            }
+
+            self.next_origin_x = new_next_origin_x;
             for mut glyph_pos in other.glyphs {
                 glyph_pos.x += x_offset;
                 self.glyphs.push(glyph_pos);
@@ -817,25 +878,34 @@ mod layout_utl {
             other: &LayoutBuffer<T>,
             font_storage: &mut FontStorage,
         ) -> f32 {
-            let advance_kerned = if self.last_font_id == other.first_font_id
-                && (self.last_font_size - other.first_font_size).abs() < f32::EPSILON
+            let kerning = if let (
+                Some(last_id),
+                Some(last_size),
+                Some(last_glyph),
+                Some(other_first_id),
+                Some(other_first_size),
+                Some(other_first_glyph),
+            ) = (
+                self.last_font_id,
+                self.last_font_size,
+                self.last_glyph,
+                other.first_font_id,
+                other.first_font_size,
+                other.first_glyph,
+            ) && last_id == other_first_id
+                && (last_size - other_first_size).abs() < f32::EPSILON
             {
                 font_storage
-                    .font(self.last_font_id)
+                    .font(last_id)
                     .and_then(|font| {
-                        font.horizontal_kern_indexed(
-                            self.last_glyph,
-                            other.first_glyph,
-                            self.last_font_size,
-                        )
+                        font.horizontal_kern_indexed(last_glyph, other_first_glyph, last_size)
                     })
                     .unwrap_or(0.0)
-                    + self.last_metrics.advance_width
             } else {
-                self.last_metrics.advance_width
+                0.0
             };
 
-            let x_offset = self.last_origin_x + advance_kerned;
+            let x_offset = self.next_origin_x + kerning;
             x_offset + other.instance_length
         }
 
