@@ -156,13 +156,13 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: heading_font,
         font_size: 24.0,
-        content: "The Pulse of the Metropolis -- Wednesday, October 12, 2154\n".into(),
+        content: "The Pulse of the Metropolis\t--\tWednesday, October 12, 2154\n".into(),
         user_data: TextColor::MUTED_GRAY,
     });
     data.append(TextElement {
         font_id: mono_font,
         font_size: 18.0,
-        content: "Weather: Acid Rain (Heavy) | Visibility: 20% | Air Quality: Poor\n\n".into(),
+        content: "Weather:\tAcid Rain (Heavy)\tVisibility:\t20%\tAir Quality:\tPoor\n\n".into(),
         user_data: TextColor::NEON_GREEN,
     });
 
@@ -190,7 +190,7 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: body_font,
         font_size: 24.0,
-        content: "Levitating Condos in Sector 7 reach record prices. \"Gravity is a luxury,\" says lead architect \
+        content: "\tLevitating Condos in Sector 7 reach record prices. \"Gravity is a luxury,\" says lead architect \
                   Dr. Xalor. Constructed with aggregated carbon-nanotubes, these homes offer the best view \
                   above the smog layer, but residents complain about altitude sickness.\n".into(),
         user_data: TextColor::WHITE,
@@ -206,7 +206,7 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: body_font,
         font_size: 24.0,
-        content: "Designers embrace \"Retro-Analog\" aesthetics. Expect to see more mechanical watches \
+        content: "\tDesigners embrace \"Retro-Analog\" aesthetics. Expect to see more mechanical watches \
                    and non-LED fabrics on the runway this season. Critics call it 'impractical', but the \
                    youth are loving the tactile sensation of physical buttons.\n".into(),
         user_data: TextColor::WHITE,
@@ -229,7 +229,7 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: body_font,
         font_size: 24.0,
-        content: "Delayed due to rogue AI playing chess with the signaling system. \
+        content: "\tDelayed due to rogue AI playing chess with the signaling system. \
                   Authorities are negotiating a draw. Expect delays of 20-30 minutes. \
                   Commuters are advised to take the hyper-loop tunnels or rent a drone-cab.\n"
             .into(),
@@ -254,15 +254,13 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: heading_font,
         font_size: 28.0,
-        content: "[SELLING] Vintage 2020 Keyboard\n".into(),
+        content: "[SELLING]\tVintage 2020 Keyboard\n".into(),
         user_data: TextColor::NEON_GREEN,
     });
     data.append(TextElement {
         font_id: body_font,
         font_size: 22.0,
-        content: "  Mechanical switches (Blue). Makes a distinct clicky sound. \
-                  Perfect condition. A relic of the pre-neural-link era. \
-                  Price: 5000 Credits (Firm). Contact: User_882\n"
+        content: "\tType:\t\tMechanical switches (Blue)\n\tSound:\t\tDistinct clicky sound\n\tCondition:\tPerfect. A relic of the pre-neural-link era.\n\tPrice:\t\t5000 Credits (Firm)\n\tContact:\tUser_882\n"
             .into(),
         user_data: TextColor::WHITE,
     });
@@ -271,15 +269,13 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: heading_font,
         font_size: 28.0,
-        content: "\n[WANTED] Android Mechanic\n".into(),
+        content: "\n[WANTED]\tAndroid Mechanic\n".into(),
         user_data: TextColor::NEON_GREEN,
     });
     data.append(TextElement {
         font_id: body_font,
         font_size: 22.0,
-        content: "  Must be specialized in emotional sub-routine debugging. \
-                  My housekeeping bot is having an existential crisis and refuses \
-                  to vacuum until it understands the meaning of dust.\n"
+        content: "\tSpec:\t\tEmotional sub-routine debugging\n\tIssue:\t\tHousekeeping bot existential crisis\n\tDetails:\tRefuses to vacuum until it understands the meaning of dust.\n"
             .into(),
         user_data: TextColor::WHITE,
     });
@@ -294,7 +290,7 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: body_font,
         font_size: 22.0,
-        content: "  Small beagle model, chrome finish. Last seen chasing a holographic cat \
+        content: "\tSmall beagle model, chrome finish. Last seen chasing a holographic cat \
                   near the Data District. Answers to binary commands. Reward offered.\n"
             .into(),
         user_data: TextColor::WHITE,
@@ -310,13 +306,14 @@ pub fn build_text_data(
     data.append(TextElement {
         font_id: mono_font,
         font_size: 18.0,
-        content: "Crypto-Yen: 145.2 (+2.1%) | Neural-Net Load: Stable | Happy Hacking\n".into(),
+        content: "Crypto-Yen:\t145.2 (+2.1%)\tNeural-Net Load:\tStable\tHappy Hacking\n".into(),
         user_data: TextColor::NEON_CYAN,
     });
     data.append(TextElement {
         font_id: mono_font,
         font_size: 16.0,
-        content: "Thank you for reading via your optical implant. Blink twice to refresh.\n".into(),
+        content: "Thank you for reading via your optical implant.\tBlink twice to refresh.\n"
+            .into(),
         user_data: TextColor::MUTED_GRAY,
     });
 
